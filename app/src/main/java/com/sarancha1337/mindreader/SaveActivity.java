@@ -65,7 +65,7 @@ public class SaveActivity extends AppCompatActivity {
     }
 
     // сохранение файла
-    void saveText(String text, String fileName)
+    private void saveText(String text, String fileName)
     {
         // формируем объект File, который содержит путь к файлу
         file = new File(getExternalFilesDir(null), fileName);
@@ -84,7 +84,7 @@ public class SaveActivity extends AppCompatActivity {
         }
     }
 
-    void sendMail(String email)
+    private void sendMail(String email)
     {
         final Intent emailIntent = new Intent(android.content.Intent.ACTION_SEND);
 
