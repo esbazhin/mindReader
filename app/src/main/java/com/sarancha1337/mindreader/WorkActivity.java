@@ -1,15 +1,19 @@
 package com.sarancha1337.mindreader;
 
+import android.app.Activity;
 import android.content.Intent;
+import android.graphics.Color;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.CountDownTimer;
+import android.os.SystemClock;
 import android.support.v4.app.Fragment;
 import android.support.v4.app.FragmentManager;
 import android.support.v4.app.FragmentPagerAdapter;
 import android.support.v4.view.ViewPager;
 import android.support.v7.app.AppCompatActivity;
 import android.view.LayoutInflater;
+import android.view.SurfaceView;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
@@ -35,6 +39,8 @@ import java.util.TimeZone;
 public class WorkActivity extends AppCompatActivity {
 
     private static boolean isFile;
+    private static boolean isDeviceChoosed;
+    private static boolean isBoth;
     private static long videoDuration;
     private static ArrayList<String> emotions;
     private static DateFormat formatter = new SimpleDateFormat("mm:ss.SSS", Locale.US);
@@ -51,6 +57,7 @@ public class WorkActivity extends AppCompatActivity {
     private GraphicsFragment fr1;
     private GraphicsFragment fr2;
     private VideoFragment vf;
+    private CameraFragment cf;
 
     private TextView emtnText;
 
@@ -73,7 +80,7 @@ public class WorkActivity extends AppCompatActivity {
         // Set up the ViewPager with the sections adapter.
         mViewPager = findViewById(R.id.container);
         mViewPager.setAdapter(mSectionsPagerAdapter);
-        mViewPager.setOffscreenPageLimit(2);
+        mViewPager.setOffscreenPageLimit(3);
 
         formatter.setTimeZone(TimeZone.getTimeZone("UTC"));
 
@@ -94,9 +101,13 @@ public class WorkActivity extends AppCompatActivity {
                 videoUri = Uri.parse(extras.getString("video"));
                 vf = VideoFragment.newInstance(videoUri);
                 videoDuration = extras.getLong("duration");
-                BluetoothSocketHandler.beginListenForData();
-                if (BluetoothSocketHandler.getCurrentMessage().equals("error\n"))
-                    finish();
+                isDeviceChoosed = extras.getBoolean("isDeviceChoosed");
+                isBoth = extras.getBoolean("isBoth");
+                if (isDeviceChoosed || isBoth) {
+                    BluetoothSocketHandler.beginListenForData();
+                    if (BluetoothSocketHandler.getCurrentMessage().equals("error\n"))
+                        finish();
+                }
             }
         } catch (NullPointerException e) {
             finish();
@@ -119,6 +130,7 @@ public class WorkActivity extends AppCompatActivity {
             public void onClick(View v) {
                 timer.start();
                 vf.start();
+                cf.start(WorkActivity.this);
                 startB.setEnabled(false);
                 stopB.setEnabled(true);
             }
@@ -130,9 +142,10 @@ public class WorkActivity extends AppCompatActivity {
             @Override
             public void onClick(View v) {
 
-                if (!isExit)
+                if (!isExit) {
                     stop(timer);
-                else
+                    cf.stop(WorkActivity.this);
+                } else
                     saveAndExit(timer);
 
                 resetB.setEnabled(true);
@@ -152,12 +165,25 @@ public class WorkActivity extends AppCompatActivity {
             }
         };
         resetB.setOnClickListener(reset);
+
+        cf = CameraFragment.newInstance();
     }
 
     @Override
     public void onBackPressed() {
-        BluetoothSocketHandler.Stop();
+        if (isDeviceChoosed || isBoth)
+            BluetoothSocketHandler.Stop();
+        if (cf != null)
+            cf.stop(this);
         finish();
+    }
+
+    @Override
+    protected void onDestroy() {
+        if (cf != null)
+            cf.stop(this);
+        finish();
+        super.onDestroy();
     }
 
     private ArrayList<ArrayList<DataPoint>> readFile(String filePath) {
@@ -202,6 +228,8 @@ public class WorkActivity extends AppCompatActivity {
             }
             i++;
         }
+
+        videoDuration = (long) data1.get(data1.size() - 1).getX();
         ArrayList<ArrayList<DataPoint>> answ = new ArrayList<>(2);
         answ.add(data1);
         answ.add(data2);
@@ -233,7 +261,9 @@ public class WorkActivity extends AppCompatActivity {
         if (isFile) {
             timer.clearAllData();
         } else {
-            BluetoothSocketHandler.Stop();
+            if (isDeviceChoosed || isBoth)
+                BluetoothSocketHandler.Stop();
+
             StringBuilder text = new StringBuilder(videoUri.toString() + "\n");
 
             ArrayList<DataPoint> data1 = timer.getData1();
@@ -340,9 +370,13 @@ public class WorkActivity extends AppCompatActivity {
             if (isFirst) {
                 textView.setText("Сила эмоции:");
                 graph.addSeries(timer.getSeries1());
+                if (!isFile && isBoth)
+                    graph.addSeries(timer.getSeries11());
             } else {
                 textView.setText("Окраска эмоции:");
                 graph.addSeries(timer.getSeries2());
+                if (!isFile && isBoth)
+                    graph.addSeries(timer.getSeries22());
             }
 
             setGraphStable();
@@ -375,14 +409,67 @@ public class WorkActivity extends AppCompatActivity {
         }
     }
 
+    public static class CameraFragment extends Fragment {
+        private static CameraHandler handler;
+
+        public CameraFragment() {
+        }
+
+        static CameraFragment newInstance() {
+            return new CameraFragment();
+        }
+
+        @Override
+        public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
+
+            View rootView = inflater.inflate(R.layout.work_camera, container, false);
+
+            boolean detect = !isFile && (!isDeviceChoosed || isBoth);
+
+            SurfaceView sv = rootView.findViewById(R.id.surfaceView);
+            handler = new CameraHandler(getContext(), sv, detect);
+
+            return rootView;
+        }
+
+        void start(Activity act) {
+            if (!isFile)
+                handler.startRecording(act);
+        }
+
+        void stop(Activity act) {
+            if (!isFile)
+                handler.stopRecording(act);
+        }
+
+        String getEmotion() {
+            return handler.getEmotion();
+        }
+
+        float getValence() {
+            return handler.getValence();
+        }
+
+        float getEng() {
+            return handler.getEng();
+        }
+
+        void release() {
+            handler.release();
+        }
+    }
+
     class MyTimer extends CountDownTimer {
         final static int maxx = 100;
 
         int nextData = 0;
         LineGraphSeries<DataPoint> series1;
         LineGraphSeries<DataPoint> series2;
+        LineGraphSeries<DataPoint> series11;
+        LineGraphSeries<DataPoint> series22;
         private ArrayList<DataPoint> data1;
         private ArrayList<DataPoint> data2;
+
 
         MyTimer(long duration, long interval) {
             super(duration, interval);
@@ -391,7 +478,17 @@ public class WorkActivity extends AppCompatActivity {
             data2 = new ArrayList<>();
 
             series1 = new LineGraphSeries<>();
+            series1.setColor(Color.RED);
+
             series2 = new LineGraphSeries<>();
+            series2.setColor(Color.RED);
+
+            if (!isFile) {
+                series11 = new LineGraphSeries<>();
+                series11.setColor(Color.GREEN);
+                series22 = new LineGraphSeries<>();
+                series22.setColor(Color.GREEN);
+            }
         }
 
         @Override
@@ -407,26 +504,63 @@ public class WorkActivity extends AppCompatActivity {
                     curStr = data1.get(nextData);
                     curP = data2.get(nextData);
                     curEm = emotions.get(nextData);
+
+                    long x = (long)curStr.getX();
+                    if(x > videoDuration - millisUntilFinished) {
+                        SystemClock.sleep(x - (videoDuration - millisUntilFinished));
+                    }
                 } else {
                     return;
                 }
             } else {
                 Date date = new Date(videoDuration - millisUntilFinished);
 
-                //
+                if (isBoth) {
+                    String[] data = readFromEeg();
+                    long x = Long.valueOf(data[0]);
+                    long y = Long.valueOf(data[1]);
+                    //
+                    curStr = new DataPoint(date, x);
+                    curP = new DataPoint(date, y);
+                    curEm = data[2] + " по лицу: " + cf.getEmotion();
 
-                String[] data = readFromEeg();
-                long x = Long.valueOf(data[0]);
-                long y = Long.valueOf(data[1]);
-                //
-                curStr = new DataPoint(date, x);
-                curP = new DataPoint(date, y);
-                curEm = data[2];
 
-                emotions.add(curEm);
+                    emotions.add(curEm);
 
-                data1.add(curStr);
-                data2.add(curP);
+                    data1.add(curStr);
+                    data2.add(curP);
+
+
+                    DataPoint faceStr = new DataPoint(date, cf.getEng());
+                    DataPoint faceP = new DataPoint(date, cf.getValence());
+
+                    series11.appendData(faceStr, true, maxx);
+                    series22.appendData(faceP, true, maxx);
+                } else if (isDeviceChoosed) {
+                    String[] data = readFromEeg();
+                    long x = Long.valueOf(data[0]);
+                    long y = Long.valueOf(data[1]);
+                    //
+                    curStr = new DataPoint(date, x);
+                    curP = new DataPoint(date, y);
+                    curEm = data[2];
+
+
+                    emotions.add(curEm);
+
+                    data1.add(curStr);
+                    data2.add(curP);
+                } else{
+                    curStr = new DataPoint(date, cf.getEng());
+                    curP = new DataPoint(date, cf.getValence());
+                    curEm = " по лицу: " + cf.getEmotion();
+
+
+                    emotions.add(curEm);
+
+                    data1.add(curStr);
+                    data2.add(curP);
+                }
             }
             nextData++;
 
@@ -450,6 +584,14 @@ public class WorkActivity extends AppCompatActivity {
 
         LineGraphSeries<DataPoint> getSeries2() {
             return series2;
+        }
+
+        LineGraphSeries<DataPoint> getSeries11() {
+            return series11;
+        }
+
+        LineGraphSeries<DataPoint> getSeries22() {
+            return series22;
         }
 
         ArrayList<DataPoint> getData1() {
@@ -527,15 +669,20 @@ public class WorkActivity extends AppCompatActivity {
                     return fr1;
                 case (2):
                     return fr2;
-
+                case (3):
+                    return cf;
             }
             return null;
         }
 
         @Override
         public int getCount() {
-            // Show 3 total pages.
-            return 3;
+            // Show 4 total pages.
+//            if(!isFile)
+//                return 4;
+//            else
+//                return 3;
+            return 4;
         }
     }
 }

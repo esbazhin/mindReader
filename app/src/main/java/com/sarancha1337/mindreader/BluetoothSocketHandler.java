@@ -35,7 +35,7 @@ public class BluetoothSocketHandler {
             OutputStream mmOutputStream = socket.getOutputStream();
             mmOutputStream.write(msg.getBytes());
 
-        } catch (IOException e) {
+        } catch (Exception e) {
             // TODO Auto-generated catch block
             e.printStackTrace();
         }
@@ -95,7 +95,7 @@ public class BluetoothSocketHandler {
 //                                }
 //                            }
                         }
-                    } catch (IOException ex) {
+                    } catch (Exception ex) {
                         stopWorker = true;
                     }
                 }
