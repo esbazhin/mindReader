@@ -517,8 +517,8 @@ public class WorkActivity extends AppCompatActivity {
 
                 if (isBoth) {
                     String[] data = readFromEeg();
-                    long x = Long.valueOf(data[0]);
-                    long y = Long.valueOf(data[1]);
+                    float x = Float.valueOf(data[0]);
+                    float y = Float.valueOf(data[1]);
                     //
                     curStr = new DataPoint(date, x);
                     curP = new DataPoint(date, y);
@@ -538,8 +538,8 @@ public class WorkActivity extends AppCompatActivity {
                     series22.appendData(faceP, true, maxx);
                 } else if (isDeviceChoosed) {
                     String[] data = readFromEeg();
-                    long x = Long.valueOf(data[0]);
-                    long y = Long.valueOf(data[1]);
+                    float x = Float.valueOf(data[0]);
+                    float y = Float.valueOf(data[1]);
                     //
                     curStr = new DataPoint(date, x);
                     curP = new DataPoint(date, y);

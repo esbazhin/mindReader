@@ -229,7 +229,7 @@ public class MainActivity extends AppCompatActivity {
             public void onClick(View v) {
                 //chooseFileButton.setEnabled(true);
                 Intent intent = new Intent(MainActivity.this, WorkActivity.class);
-                Switch sw = findViewById(R.id.switch1);
+                Switch sw = findViewById(R.id.switch3);
 
                 if (fileChosen && sw.isChecked()) {
                     if (deviceConnected)
@@ -247,8 +247,8 @@ public class MainActivity extends AppCompatActivity {
                     intent.putExtra("isDeviceChoosed", isDeviceChoosed);
                     intent.putExtra("isBoth", isBoth);
                     startActivity(intent);
-                    //recreate();
-                    System.exit(0);
+                    recreate();
+                    //System.exit(0);
                     //txt.setText("new session");
                 } else if (videoSet && !isDeviceChoosed && !isBoth) {
                     if (deviceConnected)

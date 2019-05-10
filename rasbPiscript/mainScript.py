@@ -4,20 +4,52 @@ import serial
 import brain as b
 from bluetooth import *
 import importlib
+import shutil
 
+def led_on():
+    os.system("echo 1 | sudo tee /sys/class/leds/led0/brightness")
+    os.system("echo 1 | sudo tee /sys/class/leds/led1/brightness")
+
+def led_off():
+    os.system("echo 0 | sudo tee /sys/class/leds/led0/brightness")
+    os.system("echo 0 | sudo tee /sys/class/leds/led1/brightness")
 
 def change_script(sock):
+    os.system("echo 1 | sudo tee /sys/class/leds/led1/brightness")
+    print('begin change')
     data = sock.recv(1024)
     size = int(str(data, 'utf-8'))
+    print(str(size))
     data = sock.recv(size)
     text = str(data, 'utf-8')
+    rec = len(data)
+    while rec < size:
+        data = sock.recv(size - rec)
+        rec += len(data)
+        text += str(data, 'utf-8')
+    print(text)
+    shutil.copy("brain.py", "copy.py")
     file = open("brain.py", 'w')
     file.write(text)
     file.close()
-    importlib.reload(b)
-
+    try:
+        importlib.reload(b)
+        client_sock.send("ready\n")
+    except:
+        shutil.copy("copy.py", "brain.py")
+        importlib.reload(b)
+        client_sock.send("error\n")
+        
+    os.system("echo 0 | sudo tee /sys/class/leds/led1/brightness")
 
 while True:
+    led_off()
+    led_on()
+    led_off()
+    led_on()
+    led_off()
+    led_on()
+    
     ser = serial.Serial()
     ser.baudrate = 57600
     ser.port = "/dev/ttyUSB0"
@@ -27,6 +59,10 @@ while True:
             ser.open()
         except serial.SerialException:
             print("error wrong com")
+            os.system("echo 0 | sudo tee /sys/class/leds/led0/brightness")
+            # sys.exit()
+            continue
+            
 
     server_sock = BluetoothSocket(RFCOMM)
     server_sock.bind(("", PORT_ANY))
@@ -47,6 +83,7 @@ while True:
 
     client_sock, client_info = server_sock.accept()
     print("Accepted connection from ", client_info)
+    led_off()
 
     try:
         while True:
@@ -57,7 +94,8 @@ while True:
             if x == "start": break
             if x == "change script":
                 change_script(client_sock)
-        i = 0
+
+        os.system("echo 1 | sudo tee /sys/class/leds/led0/brightness")
         while True:
             #
             # ch1 = random.randint(0, 100)
@@ -69,10 +107,15 @@ while True:
             # i += 1
 
             client_sock.send(msg)
-            print(msg)
+            # print(msg)
     except IOError:
+        try:
+            client_sock.send("error\n")
+        except:
+            pass
         pass
 
+    os.system("echo 0 | sudo tee /sys/class/leds/led0/brightness")
     print("disconnected")
 
     client_sock.close()
